@@ -1,0 +1,3 @@
+[submodule "BoneReadingCore"]
+	path = BoneReadingCore
+	url = https://github.com/Sebane1/BoneReadingCore
