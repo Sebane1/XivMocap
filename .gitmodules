@@ -1,3 +1,6 @@
-[submodule "BoneReadingCore"]
-	path = BoneReadingCore
+[submodule "XivMocap/BoneReadingCore"]
+	path = XivMocap/BoneReadingCore
 	url = https://github.com/Sebane1/BoneReadingCore
+[submodule "Brio"]
+	path = Brio
+	url = https://github.com/Sebane1/Brio.git

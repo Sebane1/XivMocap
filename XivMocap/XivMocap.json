@@ -1,12 +1,12 @@
 {
-  "Author": "your name here",
-  "Name": "Sample Plugin",
-  "Punchline": "A short one-liner that shows up in /xlplugins.",
-  "Description": "A description that shows up in /xlplugins. List any major slash-command(s).",
-  "ApplicableVersion": "any",
-  "Tags": [
-    "sample",
-    "plugin",
-    "goats"
-  ]
+    "Author": "Sebby",
+    "Name": "XivMocap",
+    "Punchline": "Adds VMC mocap support to FFXIV",
+    "Description": "Adds VMC mocap support to FFXIV",
+    "ApplicableVersion": "any",
+    "Tags": [
+        "Mocap",
+        "Full Body Tracking",
+        "VMC"
+    ]
 }
