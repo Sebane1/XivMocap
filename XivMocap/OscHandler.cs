@@ -3,37 +3,52 @@
 using System.Collections.Generic;
 using System;
 using System.Diagnostics;
-using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using Everything_To_IMU_SlimeVR.Osc;
 using LucHeart.CoreOSC;
 using System.Threading.Tasks;
 using XivMocap;
+using System.Linq;
 
 namespace Everything_To_IMU_SlimeVR.Osc
 {
     public class OscHandler : IDisposable
     {
-        public static readonly string BundleAddress = "#bundle";
+        public static readonly string BundleAddress = "#bundle\0";
         public static readonly byte[] BundleAddressBytes = Encoding.ASCII.GetBytes(BundleAddress);
         public static readonly string AvatarParamPrefix = "/avatar/parameters/";
         public static List<string> parameterList = new List<string>();
 
         private readonly UdpClient _oscClient;
-
+        private UdpClient _udpSender;
         private readonly CancellationTokenSource _cancelTokenSource = new();
         private Task _oscReceiveTask;
         private bool _disposed = false;
+        private ulong _timetag;
 
         public bool Disposed { get => _disposed; }
 
         public OscHandler()
         {
             _oscClient = new UdpClient(39539);
-            Task.Run(() => {
+            _udpSender = new UdpClient();
+            _udpSender.Connect("localhost", 39540);
+            Task.Run(() =>
+            {
                 _oscReceiveTask = OscReceiveTask(_cancelTokenSource.Token);
+            });
+            Task.Run(() =>
+            {
+                while (true)
+                {
+                    // Throwing stuff at the wall, send some stuff back to slime in case it tells us we exist.
+                    var message = new OscMessage(@"/VMC/Ext/OK", 3, 0, 1);
+                    var message2 = new OscMessage(@"/VMC/Ext/Set/Req");
+                    var oscBundle = new OscBundle(_timetag++, message, message2);
+                    _udpSender.SendAsync(oscBundle.GetBytes());
+                    Thread.Sleep(100);
+                }
             });
         }
 
@@ -41,7 +56,7 @@ namespace Everything_To_IMU_SlimeVR.Osc
         {
             return buffer.Length > 16 && buffer[..8].SequenceEqual(BundleAddressBytes);
         }
-        
+
         /// <summary>
         /// Takes in an OSC bundle package in byte form and parses it into a more usable OscBundle object.
         /// </summary>
@@ -64,36 +79,41 @@ namespace Everything_To_IMU_SlimeVR.Osc
                 try
                 {
                     var packet = await _oscClient.ReceiveAsync();
-                    if (IsBundle(packet.Buffer))
-                    {
-                        var bundle = ParseBundle(packet.Buffer);
-                        if (bundle.Timestamp > DateTime.Now)
-                        {
-                            // Wait for the specified timestamp
-                            _ = Task.Run(
-                                async () =>
-                                {
-                                    await Task.Delay(bundle.Timestamp - DateTime.Now, cancelToken);
-                                    OnOscBundle(bundle);
-                                },
-                                cancelToken
-                            );
-                        }
-                        else
-                        {
-                            OnOscBundle(bundle);
-                        }
-                    }
-                    else
-                    {
-                        OnOscMessage(OscMessage.ParseMessage(packet.Buffer));
-                    }
+                    ProcessBundle(packet.Buffer, cancelToken);
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception e)
                 {
                     Debug.WriteLine(e);
                 }
+            }
+        }
+
+        private void ProcessBundle(byte[] buffer, CancellationToken cancelToken = default)
+        {
+            if (IsBundle(buffer))
+            {
+                var bundle = ParseBundle(buffer);
+                if (bundle.Timestamp > DateTime.Now)
+                {
+                    // Wait for the specified timestamp
+                    _ = Task.Run(
+                        async () =>
+                        {
+                            await Task.Delay(bundle.Timestamp - DateTime.Now, cancelToken);
+                            OnOscBundle(bundle);
+                        },
+                        cancelToken
+                    );
+                }
+                else
+                {
+                    OnOscBundle(bundle);
+                }
+            }
+            else
+            {
+                OnOscMessage(OscMessage.ParseMessage(buffer));
             }
         }
 
@@ -112,9 +132,27 @@ namespace Everything_To_IMU_SlimeVR.Osc
             //    return;
             //}
             Plugin.Log.Verbose(message.Address);
-            foreach(float item in message.Arguments)
+            var loweredAddress = message.Address.ToLower();
+            if (loweredAddress.Contains("/vmc/ext/ok"))
             {
-                Plugin.Log.Verbose(item.ToString());
+                foreach (int item in message.Arguments)
+                {
+                    Plugin.Log.Verbose(item.ToString());
+                }
+            }
+            else if (loweredAddress.Contains("/vmc/ext/t"))
+            {
+                foreach (float item in message.Arguments)
+                {
+                    Plugin.Log.Verbose(item.ToString());
+                }
+            }
+            else if (loweredAddress.Contains("/vmc/ext/bone/pos"))
+            {
+                foreach (float item in message.Arguments)
+                {
+                    Plugin.Log.Verbose(item.ToString());
+                }
             }
         }
 
