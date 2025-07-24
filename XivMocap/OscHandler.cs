@@ -10,6 +10,7 @@ using LucHeart.CoreOSC;
 using System.Threading.Tasks;
 using XivMocap;
 using System.Linq;
+using System.Numerics;
 
 namespace Everything_To_IMU_SlimeVR.Osc
 {
@@ -19,6 +20,7 @@ namespace Everything_To_IMU_SlimeVR.Osc
         public static readonly byte[] BundleAddressBytes = Encoding.ASCII.GetBytes(BundleAddress);
         public static readonly string AvatarParamPrefix = "/avatar/parameters/";
         public static List<string> parameterList = new List<string>();
+        public event EventHandler<Tuple<string, Quaternion>> BoneUpdate;
 
         private readonly UdpClient _oscClient;
         private UdpClient _udpSender;
@@ -26,7 +28,7 @@ namespace Everything_To_IMU_SlimeVR.Osc
         private Task _oscReceiveTask;
         private bool _disposed = false;
         private ulong _timetag;
-
+        private List<string> _boneList = new List<string>();
         public bool Disposed { get => _disposed; }
 
         public OscHandler()
@@ -43,7 +45,7 @@ namespace Everything_To_IMU_SlimeVR.Osc
                 while (true)
                 {
                     // Throwing stuff at the wall, send some stuff back to slime in case it tells us we exist.
-                    var message = new OscMessage(@"/VMC/Ext/OK", 3, 0, 1);
+                    var message = new OscMessage(@"/VMC/Ext/OK", 1, 0, 1);
                     var message2 = new OscMessage(@"/VMC/Ext/Set/Req");
                     var oscBundle = new OscBundle(_timetag++, message, message2);
                     _udpSender.SendAsync(oscBundle.GetBytes());
@@ -64,13 +66,8 @@ namespace Everything_To_IMU_SlimeVR.Osc
         /// <returns>Bundle containing elements and a timetag</returns>
         public static OscBundle ParseBundle(Span<byte> msg)
         {
-            ReadOnlySpan<byte> msgReadOnly = msg;
-            var messages = new List<OscMessage>();
-            var index = 0;
-            var message = OscMessage.ParseMessage(msg);
-            messages.Add(message);
-            var output = new OscBundle((ulong)DateTime.Now.Ticks, messages.ToArray());
-            return output;
+            var message = OscBundle.ParseBundle(msg); ;
+            return message;
         }
         private async Task OscReceiveTask(CancellationToken cancelToken = default)
         {
@@ -84,7 +81,7 @@ namespace Everything_To_IMU_SlimeVR.Osc
                 catch (OperationCanceledException) { }
                 catch (Exception e)
                 {
-                    Debug.WriteLine(e);
+                    Plugin.Log.Warning(e.Message);
                 }
             }
         }
@@ -121,7 +118,13 @@ namespace Everything_To_IMU_SlimeVR.Osc
         {
             foreach (var message in bundle.Messages)
             {
-                OnOscMessage(message);
+                try
+                {
+                    OnOscMessage(message);
+                }
+                catch
+                {
+                }
             }
         }
 
@@ -131,27 +134,45 @@ namespace Everything_To_IMU_SlimeVR.Osc
             //{
             //    return;
             //}
-            Plugin.Log.Verbose(message.Address);
+            //Plugin.Log.Verbose(message.Address);
             var loweredAddress = message.Address.ToLower();
             if (loweredAddress.Contains("/vmc/ext/ok"))
             {
                 foreach (int item in message.Arguments)
                 {
-                    Plugin.Log.Verbose(item.ToString());
+                    //Plugin.Log.Verbose(item.ToString());
                 }
             }
             else if (loweredAddress.Contains("/vmc/ext/t"))
             {
                 foreach (float item in message.Arguments)
                 {
-                    Plugin.Log.Verbose(item.ToString());
+                    //Plugin.Log.Verbose(item.ToString());
                 }
             }
             else if (loweredAddress.Contains("/vmc/ext/bone/pos"))
             {
-                foreach (float item in message.Arguments)
+                int index = 0;
+                string name = message.Arguments[index++] as string;
+                if (!_boneList.Contains(name))
                 {
-                    Plugin.Log.Verbose(item.ToString());
+                    Plugin.Log.Info(name);
+                    _boneList.Add(name);
+                }
+                BoneUpdate?.Invoke(this, new Tuple<string, Quaternion>(name, new Quaternion(
+                    (float)message.Arguments[1],
+                    (float)message.Arguments[2],
+                    (float)message.Arguments[3],
+                    (float)message.Arguments[4])));
+            }
+            else if (loweredAddress.Contains("/vmc/ext/root/pos"))
+            {
+                int index = 0;
+                string name = message.Arguments[index++] as string;
+                if (!_boneList.Contains(name))
+                {
+                    Plugin.Log.Info(name);
+                    _boneList.Add(name);
                 }
             }
         }

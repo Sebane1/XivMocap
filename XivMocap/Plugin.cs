@@ -16,6 +16,7 @@ using Brio.Core;
 using Everything_To_IMU_SlimeVR.Osc;
 using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 
 namespace XivMocap;
 
@@ -30,6 +31,7 @@ public sealed class Plugin : IDalamudPlugin
 
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
+
     private const string CommandName = "/pmycommand";
 
     public Configuration Configuration { get; init; }
@@ -42,7 +44,37 @@ public sealed class Plugin : IDalamudPlugin
     private OscHandler _oscHandler;
     private SkeletonPosingCapability _posingCapability;
     private bool _disposed;
+    Dictionary<string, BonePoseInfo> _bones = new Dictionary<string, BonePoseInfo>();
+    Dictionary<string, string> _boneNameMapping = new Dictionary<string, string>()
+    {
+        {"Hips", "j_kosi" },
+        {"Spine", "j_sebo_a" },
+        {"Chest", "j_sebo_b" },
+        {"UpperChest", "j_sebo_c" },
 
+        {"LeftShoulder", "j_sako_l" },
+        {"LeftUpperArm", "j_ude_a_l" },
+        {"LeftLowerArm", "j_ude_b_l" },
+        {"LeftHand", "j_te_l" },
+
+        {"RightShoulder", "j_sako_r" },
+        {"RightUpperArm", "j_ude_a_r" },
+        {"RightLowerArm", "j_ude_b_r" },
+        {"RightHand", "j_te_r" },
+
+        {"LeftUpperLeg", "j_asi_a_l" },
+        {"LeftLowerLeg", "j_asi_c_l" },
+        {"LeftFoot", "j_asi_d_l" },
+        {"LeftToes", "j_adi_e_l" },
+
+        {"RightUpperLeg", "j_asi_a_r" },
+        {"RightLowerLeg", "j_asi_c_r" },
+        {"RightFoot", "j_asi_d_r" },
+        {"RightToes", "j_adi_e_r" },
+
+        {"Neck", "j_kubi" },
+        {"Head", "j_kao" },
+    };
     Stopwatch _startingCooldown = new Stopwatch();
     private ConfigWindow ConfigWindow { get; init; }
     private MainWindow MainWindow { get; init; }
@@ -94,6 +126,7 @@ public sealed class Plugin : IDalamudPlugin
                         _startingCooldown.Start();
                         _brio = new Brio.Brio(PluginInterface);
                         _oscHandler = new OscHandler();
+                        _oscHandler.BoneUpdate += _oscHandler_BoneUpdate;
                     }
                     if (_startingCooldown.ElapsedMilliseconds > 5000)
                     {
@@ -111,15 +144,16 @@ public sealed class Plugin : IDalamudPlugin
                             }
                             if (_posingCapability != null)
                             {
-                                foreach (var bone in _posingCapability.SkeletonService.Skeletons[0].Bones)
+                                if (_posingCapability.SkeletonService.Skeletons.Count > 0)
                                 {
-                                    new BonePoseInfoId(bone.Name, bone.PartialId, PoseInfoSlot.Character);
-                                    _posingCapability.GetBonePose(bone).Apply(new Brio.Core.Transform()
+                                    foreach (var bone in _posingCapability.SkeletonService.Skeletons[0].Bones)
                                     {
-                                        Position = new Vector3(0, 0, 0),
-                                        Rotation = new Vector3(0, 0, 0).ToQuaternion(),
-                                        Scale = new Vector3(0, 0, 0)
-                                    });
+                                        if (!_bones.ContainsKey(bone.Name))
+                                        {
+                                            _bones[bone.Name] = _posingCapability.GetBonePose(bone);
+                                            Plugin.Log.Info(bone.Name);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -131,6 +165,14 @@ public sealed class Plugin : IDalamudPlugin
                 Plugin.Log.Warning(e, e.Message);
             }
         }
+    }
+
+    private void _oscHandler_BoneUpdate(object? sender, Tuple<string, Quaternion> e)
+    {
+        Framework.RunOnFrameworkThread(() =>
+        {
+            _bones[_boneNameMapping[e.Item1]].Apply(new Transform() { Position = new Vector3(), Rotation = e.Item2, Scale = new Vector3() });
+        });
     }
 
     public void Dispose()
