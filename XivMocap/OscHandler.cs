@@ -20,7 +20,7 @@ namespace Everything_To_IMU_SlimeVR.Osc
         public static readonly byte[] BundleAddressBytes = Encoding.ASCII.GetBytes(BundleAddress);
         public static readonly string AvatarParamPrefix = "/avatar/parameters/";
         public static List<string> parameterList = new List<string>();
-        public event EventHandler<Tuple<string, Quaternion>> BoneUpdate;
+        public event EventHandler<Tuple<string, Vector3, Quaternion>> BoneUpdate;
 
         private readonly UdpClient _oscClient;
         private UdpClient _udpSender;
@@ -159,11 +159,16 @@ namespace Everything_To_IMU_SlimeVR.Osc
                     Plugin.Log.Info(name);
                     _boneList.Add(name);
                 }
-                BoneUpdate?.Invoke(this, new Tuple<string, Quaternion>(name, new Quaternion(
-                    (float)message.Arguments[1],
+                BoneUpdate?.Invoke(this, new Tuple<string, Vector3, Quaternion>(name,
+                    new Vector3((float)message.Arguments[1],
                     (float)message.Arguments[2],
-                    (float)message.Arguments[3],
-                    (float)message.Arguments[4])));
+                    (float)message.Arguments[3])
+                    ,
+                    new Quaternion(
+                    (float)message.Arguments[4],
+                    (float)message.Arguments[6],
+                    (float)message.Arguments[5],
+                    (float)message.Arguments[7])));
             }
             else if (loweredAddress.Contains("/vmc/ext/root/pos"))
             {

@@ -74,6 +74,7 @@ public sealed class Plugin : IDalamudPlugin
 
         {"Neck", "j_kubi" },
         {"Head", "j_kao" },
+        {"root", "n_root" },
     };
     Stopwatch _startingCooldown = new Stopwatch();
     private ConfigWindow ConfigWindow { get; init; }
@@ -167,11 +168,11 @@ public sealed class Plugin : IDalamudPlugin
         }
     }
 
-    private void _oscHandler_BoneUpdate(object? sender, Tuple<string, Quaternion> e)
+    private void _oscHandler_BoneUpdate(object? sender, Tuple<string, Vector3,  Quaternion> e)
     {
         Framework.RunOnFrameworkThread(() =>
         {
-            _bones[_boneNameMapping[e.Item1]].Apply(new Transform() { Position = new Vector3(), Rotation = e.Item2, Scale = new Vector3() });
+            _bones[_boneNameMapping[e.Item1]].Apply(new Transform() { Position = e.Item2, Rotation = e.Item3, Scale = new Vector3() });
         });
     }
 
